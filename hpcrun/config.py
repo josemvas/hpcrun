@@ -37,7 +37,7 @@ def reload():
             config_dir = AbsPath(file.read())
         read_config(config_dir)
     except FileNotFoundError:
-        print_error_and_exit(_('El archivo {file} no existe, ejecute jobrun-setup para generarlo'), file=package_data)
+        print_error_and_exit(_('El archivo {file} no existe, ejecute hpcrun-setup para generarlo'), file=package_data)
 
 def write_config(config_dir):
     print_error_and_exit(_('write_config no está implementado aún'))
@@ -144,7 +144,7 @@ def read_config(config_dir):
                 with open(install_dir/executable_names[package], 'w') as file:
                     file.write(f'#!{sys.executable}\n')
                     file.write('import sys\n')
-                    file.write('from jobrun import main\n')
+                    file.write('from hpcrun import main\n')
                     file.write('sys.path.append(\n')
                     file.write(f"r'{site_packages_dir}'\n")
                     file.write(')\n')

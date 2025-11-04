@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import sys
 assert sys.version_info >= (3, 6)
-from jobrun import config
+from hpcrun import config
 try:
-    config.reload()
+    config.setup()
 except KeyboardInterrupt:
     print('Interrumpido por el usuario')

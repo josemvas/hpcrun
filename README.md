@@ -1,6 +1,6 @@
 About
 -----
-**Jobrun** is a configurable tool to run simulation jobs in HPC clusters. It is compatible with PBS, LSF and Slurm and currently supports the following simulation software:
+**HPCRun** is a configurable tool to run simulation jobs in HPC clusters. It is compatible with PBS, LSF and Slurm and currently supports the following simulation software:
 
 * DFTB+
 * Gaussian
@@ -12,27 +12,27 @@ Install
 -------
 Install from GitHub with pip
 ```
-pip3 install --user git+https://github.com/josemvas/jobrun.git
+pip3 install --user git+https://github.com/josemvas/hpcrun.git
 ```
 
 Configuration
 -------------
 To setup create a file `cluster_profile.json` and a directory `package_profiles` and run
 ```
-jobrun-setup
+hpcrun-setup
 ```
 and follow the instructions printed on the screen.
 
 To update the configuration edit `cluster_profile.json` and/or `package_profiles` and run
 ```
-jobrun-reload
+hpcrun-reload
 ```
 
 Upgrade
 -------
 Upgrade from GitHub with pip
 ```
-pip3 install --user --upgrade git+https://github.com/josemvas/jobrun.git
+pip3 install --user --upgrade git+https://github.com/josemvas/hpcrun.git
 ```
 
 Notes

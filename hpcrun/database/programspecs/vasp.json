@@ -6,7 +6,7 @@
       'not INCAR or not POSCAR or not POTCAR': 'Deben existir los archivos de entrada INCAR, POSCAR y POTCAR',
    },
 
-   stdoutfile: 'log',
+   stdoutfile: 'logfile',
 
    filekeys: {
       INCAR: 'INCAR',
@@ -36,8 +36,8 @@
       AECCAR1: 'AECCAR1',
       AECCAR2: 'AECCAR2',
       BSEFATBAND: 'BSEFATBAND',
-      xml: 'vasprun.xml',
-      log: 'logfile',
+      logfile: 'logfile',
+      'vasprun.xml': 'vasprun.xml',
    },
 
    inputfiles: [
@@ -73,8 +73,8 @@
       'AECCAR1',
       'AECCAR2',
       'BSEFATBAND',
-      'xml',
-      'log',
+      'logfile',
+      'vasprun.xml',
    ],
 
 }
