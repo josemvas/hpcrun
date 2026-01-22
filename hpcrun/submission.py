@@ -414,7 +414,7 @@ def submit_single_job(indir, inputname, filtergroups):
                 return
 
     for path in literal_inputs:
-        path.symlink_to(literal_inputs[path])
+        literal_inputs[path].copyfile(path)
 
     for path in interpolated_inputs:
         with open(path, 'w') as file:
