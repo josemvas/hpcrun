@@ -1,10 +1,10 @@
 import os
 import sys
 import time
+import json
 from string import Template
 from subprocess import call, check_output, CalledProcessError
 from abspathlib import AbsPath, NotAbsolutePathError
-from json5conf import json5_read, InvalidJSONError
 from clinterface import *
 
 from .i18n import _
@@ -28,16 +28,17 @@ def configure_submission():
     except ValueError:
         print_error_and_exit(_('El tiempo de espera no es numérico'), delay=config.delay)
 
-    if not paths.rundir.exists():
-        paths.rundir.mkdir()
-    elif paths.rundir.is_file():
-        print_warning(_('No se puede crear el directorio de trabajo {rundir} porque existe un archivo con el mismo nombre'), rundir=paths.rundir)
+    if not paths.usrdir.exists():
+        paths.usrdir.mkdir()
+    elif paths.usrdir.is_file():
+        print_warning(_('No se puede crear el directorio de trabajo {usrdir} porque existe un archivo con el mismo nombre'), usrdir=paths.usrdir)
 
-    if paths.runconf.is_file():
+    if paths.usrconf.is_file():
         try:
-            config.update(json5_read(paths.runconf))
-        except InvalidJSONError as e:
-            print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=e.file_path, error=str(e))
+            with open(paths.usrconf, 'r') as f:
+                config.update(json.load(f))
+        except json.JSONDecodeError as e:
+            print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=paths.usrconf, error=str(e))
 
     try:
         config.packagename
@@ -531,7 +532,7 @@ def submit_single_job(indir, inputname, filtergroups):
     else:
 
         try:
-            last_time = os.stat(paths.rundir).st_mtime
+            last_time = os.stat(paths.usrdir).st_mtime
         except (FileNotFoundError, PermissionError):
             pass
         else:
@@ -549,6 +550,6 @@ def submit_single_job(indir, inputname, filtergroups):
             with open(jobdir/'id', 'w') as f:
                 f.write(jobid)
             try: 
-                os.utime(paths.rundir, None)
+                os.utime(paths.usrdir, None)
             except (FileNotFoundError, PermissionError):
                 pass
