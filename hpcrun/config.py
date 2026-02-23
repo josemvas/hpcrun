@@ -76,10 +76,12 @@ def read_config(config_dir):
 #        else:
 #            (package_dir/'database'/'schedulers'/specfile).copy(config_dir/'database'/'schedulers')
 
+    package_names_inv = {}
     for profile in (config_dir/'package_profiles').iterdir():
         specdict = json5_read(profile)
         if 'packagename' in specdict:
             package_names[profile.name] = specdict['packagename']
+            package_names_inv[specdict['packagename']] = profile.name
             executable_names[profile.name] = specdict['executablename']
 
     for package in package_names:
@@ -88,7 +90,7 @@ def read_config(config_dir):
 
     if package_names:
         prompt = _('Seleccione los programas que desea instalar/desinstalar:')
-        selected_packages = select_options(prompt, package_names, enabled_packages)
+        selected_packages = select_options(prompt, package_names_inv, enabled_packages)
     else:
         print_warning(_('No hay ningún programa configurado todavía'))
 
@@ -123,8 +125,6 @@ def read_config(config_dir):
                 outputfiles = [],
                 ignorederrors = [],
                 parametersets = [],
-                parameterpathlist = [],
-                parameterpathdict = {},
                 interpolable = [],
                 interpolvars = [],
                 prescript = [],

@@ -1,4 +1,6 @@
+import os
 import re
+import glob
 from string import Template, Formatter
 from clinterface.printing import *
 from .i18n import _
@@ -56,6 +58,18 @@ def option(key, value=None):
         return('--{}'.format(key.replace('_', '-')))
     else:
         return('--{}="{}"'.format(key.replace('_', '-'), value))
+
+def collect_matches(parameterpathlist):
+    matches = {}
+    for path in parameterpathlist:
+        path = os.path.expanduser(path)
+        try:
+            start = path.index('//') + 1
+        except ValueError:
+            start = 0
+        for item in glob.glob(path):
+            matches[item[start:]] = item
+    return matches
 
 def tree_repr(title, options):
     tree_lines = [title + ':']

@@ -3,14 +3,15 @@ import sys
 import time
 import json
 from string import Template
+from glob import has_magic as has_glob
 from subprocess import call, check_output, CalledProcessError
 from abspathlib import AbsPath, NotAbsolutePathError
 from clinterface import *
 
 from .i18n import _
 from .queue import submitjob, dispatchedjob
-from .shared import names, nodes, paths, config, options, environ, settings, script, parameterdict, interpolationdict, parameterpaths
-from .utils import ConfigTemplate, InterpolationTemplate, ArgGroups, booleans, option, template_parse
+from .shared import names, nodes, syspaths, config, options, environ, settings, script, interpolationdict, parameterfiles, parameterdirs
+from .utils import ConfigTemplate, InterpolationTemplate, ArgGroups, booleans, option, collect_matches, template_parse
 from .readmol import readmol, molblock
 
 truthy_options = ['si', 'yes']
@@ -22,23 +23,24 @@ def configure_submission():
     script.vars = []
     script.config = []
     script.body = []
+    parameterpaths = []
 
     try:
         settings.delay = float(config.delay)
     except ValueError:
         print_error_and_exit(_('El tiempo de espera no es numérico'), delay=config.delay)
 
-    if not paths.usrdir.exists():
-        paths.usrdir.mkdir()
-    elif paths.usrdir.is_file():
-        print_warning(_('No se puede crear el directorio de trabajo {usrdir} porque existe un archivo con el mismo nombre'), usrdir=paths.usrdir)
+    if not syspaths.usrdir.exists():
+        syspaths.usrdir.mkdir()
+    elif syspaths.usrdir.is_file():
+        print_warning(_('No se puede crear el directorio de trabajo {usrdir} porque existe un archivo con el mismo nombre'), usrdir=syspaths.usrdir)
 
-    if paths.usrconf.is_file():
+    if syspaths.usrconfdir.is_file():
         try:
-            with open(paths.usrconf, 'r') as f:
+            with open(syspaths.usrconfdir, 'r') as f:
                 config.update(json.load(f))
         except json.JSONDecodeError as e:
-            print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=paths.usrconf, error=str(e))
+            print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=syspaths.usrconfdir, error=str(e))
 
     try:
         config.packagename
@@ -66,21 +68,28 @@ def configure_submission():
 #            print_error_and_exit(_('El archivo de reinicio {path} no existe'), path=path)
 
     if options.remote.remote_host:
-        if not (paths.sshdir).is_dir():
-            print_error_and_exit(_('El directorio de configuración de SSH no existe'), path=paths.sshdir)
-        paths.socket = paths.sshdir/options.remote.remote_host%'sock'
+        if not (syspaths.sshdir).is_dir():
+            print_error_and_exit(_('El directorio de configuración de SSH no existe'), path=syspaths.sshdir)
+        syspaths.sshsocket = syspaths.sshdir/options.remote.remote_host%'sock'
         try:
-            paths.remote_root = check_output(['ssh', '-o', 'ControlMaster=auto', '-o', 'ControlPersist=60', '-S', paths.socket, \
+            remoteroot = check_output(['ssh', '-o', 'ControlMaster=auto', '-o', 'ControlPersist=60', '-S', syspaths.sshsocket, \
                 options.remote.remote_host, 'printenv JOBRUN_REMOTE_ROOT || true']).strip().decode(sys.stdout.encoding)
         except CalledProcessError as e:
             print_error_and_exit(_('No se pudo conectar con el servidor {host}'), host=options.remote.remote_host, error=e.output.decode(sys.stdout.encoding).strip())
-        if paths.remote_root:
-            paths.remote_root = AbsPath(paths.remote_root)
+        if remoteroot:
+            syspaths.remotehomedir = AbsPath(remoteroot) / (names.user + '@' + nodes.head)
         else:
             print_error_and_exit(_('El servidor {host} no está configurado para aceptar trabajos'), host=options.remote.remote_host)
 
-    for key in options.parametersets:
-        parameterdict[key] = options.parametersets[key].split('/')
+    if 'parameterpaths' in config:
+        if isinstance(config.parameterpaths, list):
+            if 'parameterset' in options:
+                optiondict = collect_matches(config.parameterpaths)
+                parameterpaths.append(AbsPath(optiondict[options.parameterset]))
+        elif isinstance(config.parameterpaths, dict):
+            for key in options.parametersets:
+                optiondict = collect_matches(config.parameterpaths[key])
+                parameterpaths.append(AbsPath(optiondict[options.parametersets[key]]))
 
     interpolationdict.update(options.interpolvars)
 
@@ -214,28 +223,46 @@ def configure_submission():
         if 'version' in config.defaults:
             if not config.defaults.version in config.versions:
                 print_error_and_exit(_('La versión predeterminada {version} no es válida'), version=config.defaults.version)
-            settings.version = select_option(prompt, config.versions.keys(), config.defaults.version)
+            settings.version = select_option(prompt, list(config.versions.keys()), config.defaults.version)
         else:
-            settings.version = select_option(prompt, config.versions.keys())
+            settings.version = select_option(prompt, list(config.versions.keys()))
 
     ############ Interactive parameter selection ###########
 
-    for key in config.parametersets:
-        if key not in parameterdict:
-            parameterdict[key] = []
-            parameterpath = AbsPath(config.parameterpathdict[key])
-            parent = AbsPath()
-            for part in parameterpath.parts:
-                try:
-                    part.format()
-                except IndexError:
-                    prompt = _('Seleccione un conjunto de parámetros:')
-                    option_list = parent.listdir()
-                    choice = select_option(prompt, option_list)
-                    parameterdict[key].append(choice)
-                    parent = parent/choice
+    if 'parameterpaths' in config:
+        if isinstance(config.parameterpaths, list):
+            if 'parameterset' not in options:
+                if not has_glob(config.parameterpaths[0]):
+                    parameterpaths.append(AbsPath(config.parameterpaths[0]))
                 else:
-                    parent = parent/part
+                    optiondict = collect_matches(config.parameterpaths)
+                    if len(optiondict) >= 1:
+                        prompt = _('Seleccione un conjunto de parámetros:')
+                        parameterpaths.append(AbsPath(select_option(prompt, optiondict)))
+                    else:
+                        print_error_and_exit(_('No matching parameter set found'))
+        elif isinstance(config.parameterpaths, dict):
+            for key in config.parametersets:
+                if key not in options.parametersets:
+                    if len(config.parameterpaths[key]) == 1 and not has_glob(config.parameterpaths[key][0]):
+                        parameterpaths.append(AbsPath(config.parameterpaths[key][0]))
+                    else:
+                        optiondict = collect_matches(config.parameterpaths[key])
+                        if len(optiondict) >= 1:
+                            prompt = _('Seleccione un conjunto de parámetros:')
+                            parameterpaths.append(AbsPath(select_option(prompt, optiondict)))
+                        else:
+                            print_error_and_exit(_('No matching parameter set found'))
+
+    for path in parameterpaths:
+        if path.is_file():
+            parameterfiles.append(path)
+        elif path.is_dir():
+            parameterdirs.append(path)
+        elif path.exists():
+            print_error_and_exit(_('$path does not exist', path=path))
+        else:
+            print_error_and_exit(_('$path is not a regular file', path=path))
 
     ############ End of interactive parameter selection ###########
 
@@ -353,7 +380,7 @@ def submit_single_job(indir, inputname, filtergroups):
     script.meta.append(ConfigTemplate(config.jobname).substitute(jobname=jobname))
 
     if 'out' in options.common:
-        outdir = AbsPath(options.common.out, relto=paths.cwd)
+        outdir = AbsPath(options.common.out, relto=syspaths.cwd)
     else:
         outdir = AbsPath(jobname, relto=indir)
 
@@ -428,23 +455,20 @@ def submit_single_job(indir, inputname, filtergroups):
 
     if options.remote.remote_host:
         remote_args = ArgGroups()
-        remote_home = names.user + '@' + nodes.head
-        remote_in = paths.remote_root/remote_home/'input'
-        remote_out = paths.remote_root/remote_home/'output'
-        rel_outdir = os.path.relpath(outdir, paths.home)
+        remote_in = syspaths.remotehomedir/'input'
+        remote_out = syspaths.remotehomedir/'output'
+        rel_outdir = os.path.relpath(outdir, syspaths.homedir)
         remote_args.gather(options.common)
         remote_args.flags.add('job')
         remote_args.flags.add('proxy')
         remote_args.options['in'] = remote_in/rel_outdir
         remote_args.options['out'] = remote_out/rel_outdir
-        for key, value in parameterdict.items():
-            remote_args.options[key] = val
         filelist = []
         for key in config.filekeys:
             if (outdir/jobname%key).is_file():
-                filelist.append(paths.home/'.'/rel_outdir/jobname%key)
-        arglist = ['ssh', '-qt', '-S', paths.socket, options.remote.remote_host]
-        arglist.extend(f'{env}={val}' for env, val in environ.items())
+                filelist.append(syspaths.homedir/'.'/rel_outdir/jobname%key)
+        arglist = ['ssh', '-qt', '-S', syspaths.sshsocket, options.remote.remote_host]
+        arglist.extend(f'{envar}={value}' for envar, value in environ.items())
         arglist.append(names.command)
         arglist.extend(option(key) for key in remote_args.flags)
         arglist.extend(option(key, value) for key, value in remote_args.options.items())
@@ -459,36 +483,15 @@ def submit_single_job(indir, inputname, filtergroups):
             print('</COMMAND>')
         else:
             try:
-                check_output(['ssh', '-S', paths.socket, options.remote.remote_host, f"mkdir -p '{remote_in}' '{remote_out}'"])
-                check_output([f'rsync', '-e', "ssh -S '{paths.socket}'", '-qRLtz'] + filelist + [f'{options.remote.remote_host}:{remote_in}'])
-                check_output([f'rsync', '-e', "ssh -S '{paths.socket}'", '-qRLtz', '-f', '-! */'] + filelist + [f'{options.remote.remote_host}:{remote_out}'])
+                check_output(['ssh', '-S', syspaths.sshsocket, options.remote.remote_host, f"mkdir -p '{remote_in}' '{remote_out}'"])
+                check_output([f'rsync', '-e', "ssh -S '{syspaths.sshsocket}'", '-qRLtz'] + filelist + [f'{options.remote.remote_host}:{remote_in}'])
+                check_output([f'rsync', '-e', "ssh -S '{syspaths.sshsocket}'", '-qRLtz', '-f', '-! */'] + filelist + [f'{options.remote.remote_host}:{remote_out}'])
             except CalledProcessError as e:
                 print_error_and_exit(_('Error al copiar los archivos al servidor {host}'), host=options.remote.remote_host, error=e.output.decode(sys.stdout.encoding).strip())
             call(arglist)
         return
 
     ############ Local execution ###########
-
-    for path in config.parameterpathlist:
-        path = AbsPath(path)
-        if path.exists():
-            parameterpaths.append(path)
-        else:
-            print_error_and_exit(_('La ruta de parámetros {path} no existe'), path=path)
-
-    for key in config.parametersets:
-        path = config.parameterpathdict[key]
-        try:
-            path = path.format(*parameterdict[key])
-        except ValueError as e:
-            print_error_and_exit(_('La ruta {path} contiene variables de interpolación inválidas'), path=path, key=e.args[0])
-        except KeyError as e:
-            print_error_and_exit(_('La ruta {path} contiene variables de interpolación indefinidas'), path=path, key=e.args[0])
-        path = AbsPath(path)
-        if path.exists():
-            parameterpaths.append(path)
-        else:
-            print_error_and_exit(_('La ruta de parámetros {path} no existe'), path=path)
 
     try:
         jobdir.mkdir()
@@ -511,11 +514,10 @@ def submit_single_job(indir, inputname, filtergroups):
                 f.write(script.importfile(stagedir/jobname%key, settings.execdir/config.filekeys[key]) + '\n')
     #    for key in options.restartfiles:
     #        f.write(script.importfile(stagedir/jobname%config.fileopts[key], settings.execdir/config.filekeys[config.fileopts[key]]) + '\n')
-        for path in parameterpaths:
-            if path.is_file():
-                f.write(script.importfile(path, settings.execdir/path.name) + '\n')
-            elif path.is_dir():
-                f.write(script.importdir(path, settings.execdir) + '\n')
+        for path in parameterfiles:
+            f.write(script.importfile(path, settings.execdir/path.name) + '\n')
+        for path in parameterdirs:
+            f.write(script.importdir(path, settings.execdir) + '\n')
         f.write(script.chdir(settings.execdir) + '\n')
         f.write(''.join(i + '\n' for i in config.prescript))
         f.write(' '.join(script.body) + '\n')
@@ -532,7 +534,7 @@ def submit_single_job(indir, inputname, filtergroups):
     else:
 
         try:
-            last_time = os.stat(paths.usrdir).st_mtime
+            last_time = os.stat(syspaths.usrdir).st_mtime
         except (FileNotFoundError, PermissionError):
             pass
         else:
@@ -550,6 +552,6 @@ def submit_single_job(indir, inputname, filtergroups):
             with open(jobdir/'id', 'w') as f:
                 f.write(jobid)
             try: 
-                os.utime(paths.usrdir, None)
+                os.utime(syspaths.usrdir, None)
             except (FileNotFoundError, PermissionError):
                 pass

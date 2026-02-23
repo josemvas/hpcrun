@@ -4,26 +4,8 @@ from abspathlib import AbsPath, NotAbsolutePathError
 from clinterface.printing import *
 
 from .i18n import _
-from .utils import option, tree_repr
+from .utils import option, collect_matches, tree_repr
 from .shared import config
-
-def get_path_tree(path):
-    def dirbranches(parent, partlist, dirtree):
-        if partlist:
-            part = partlist.pop(0)
-            try:
-                part.format()
-            except IndexError:
-                children = parent.listdir()
-                for child in children:
-                    dirtree[child] = {}
-                    dirbranches(parent/child, partlist, dirtree[child])
-            else:
-                dirbranches(parent/part, partlist, dirtree)
-    dirtree = {}
-    partlist = list(AbsPath(path).parts)
-    dirbranches(AbsPath(), partlist, dirtree)
-    return dirtree
 
 class StorePath(Action):
     def __init__(self, **kwargs):
@@ -75,7 +57,7 @@ def parse_args(command, config):
     group6 = parser.add_argument_group('Conjuntos de parámetros')
     group6.name = 'parametersets'
     for key in config.parametersets:
-        group6.add_argument(option(key), metavar='SETNAME', default=SUPPRESS, help=tree_repr('Conjuntos de parámetros', get_path_tree(config.parameterpathdict[key])))
+        group6.add_argument(option(key), metavar='SETNAME', default=SUPPRESS, help=tree_repr('Conjuntos de parámetros', collect_matches(config.parameterpaths[key]).keys()))
 
     group7 = parser.add_argument_group('Variables de interpolación')
     group7.name = 'interpolvars'

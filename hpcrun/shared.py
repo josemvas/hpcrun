@@ -8,18 +8,19 @@ from os import getcwd
 
 config = JSONConfDict()
 options = JSONConfDict()
-parameterdict = {}
-parameterpaths = []
+parameterfiles = []
+parameterdirs = []
 interpolationdict = {}
 script = JSONConfDict()
 names = JSONConfDict()
 nodes = JSONConfDict()
-paths = JSONConfDict()
 environ = JSONConfDict()
 settings = JSONConfDict()
 names.user = getuser()
-paths.home = AbsPath(path.expanduser('~'))
-paths.usrdir = paths.home/'.hpcrun'
-paths.usrconf = paths.usrdir/'config.json'
-paths.sshdir = paths.home/'.ssh'
-paths.cwd = getcwd()
+
+syspaths = JSONConfDict()
+syspaths.homedir = AbsPath(path.expanduser('~'))
+syspaths.usrdir = syspaths.homedir/'.hpcrun'
+syspaths.usrconfdir = syspaths.usrdir/'config.json'
+syspaths.sshdir = syspaths.homedir/'.ssh'
+syspaths.cwd = getcwd()
