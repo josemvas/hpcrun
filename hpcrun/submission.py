@@ -10,7 +10,7 @@ from clinterface import *
 
 from .i18n import _
 from .queue import submitjob, dispatchedjob
-from .shared import names, nodes, syspaths, config, options, environ, settings, script, interpolationdict, parameterfiles, parameterdirs
+from .shared import  sysvars, config, options, environ, settings, script, interpolationdict, parameterfiles, parameterdirs
 from .utils import ConfigTemplate, InterpolationTemplate, ArgGroups, booleans, option, collect_matches, template_parse
 from .readmol import readmol, molblock
 
@@ -30,17 +30,17 @@ def configure_submission():
     except ValueError:
         print_error_and_exit(_('El tiempo de espera no es numérico'), delay=config.delay)
 
-    if not syspaths.usrdir.exists():
-        syspaths.usrdir.mkdir()
-    elif syspaths.usrdir.is_file():
-        print_warning(_('No se puede crear el directorio de trabajo {usrdir} porque existe un archivo con el mismo nombre'), usrdir=syspaths.usrdir)
+    if not sysvars.usrhpcdir.exists():
+        sysvars.usrhpcdir.mkdir()
+    elif sysvars.usrhpcdir.is_file():
+        print_warning(_('No se puede crear el directorio de trabajo {usrdir} porque existe un archivo con el mismo nombre'), usrdir=sysvars.usrhpcdir)
 
-    if syspaths.usrconfdir.is_file():
+    if sysvars.usrhpcconf.is_file():
         try:
-            with open(syspaths.usrconfdir, 'r') as f:
+            with open(sysvars.usrhpcconf, 'r') as f:
                 config.update(json.load(f))
         except json.JSONDecodeError as e:
-            print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=syspaths.usrconfdir, error=str(e))
+            print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=sysvars.usrhpcconf, error=str(e))
 
     try:
         config.packagename
@@ -48,12 +48,12 @@ def configure_submission():
         print_error_and_exit(_('No se definió el nombre del programa'))
 
     try:
-        names.cluster = config.clustername
+        sysvars.clustername = config.clustername
     except AttributeError:
         print_error_and_exit(_('No se definió el nombre del clúster'))
 
     try:
-        nodes.head = config.headnode
+        sysvars.headnode = config.headnode
     except AttributeError:
         print_error_and_exit(_('No se definió el nombre del nodo maestro'))
 
@@ -68,16 +68,16 @@ def configure_submission():
 #            print_error_and_exit(_('El archivo de reinicio {path} no existe'), path=path)
 
     if options.remote.remote_host:
-        if not (syspaths.sshdir).is_dir():
-            print_error_and_exit(_('El directorio de configuración de SSH no existe'), path=syspaths.sshdir)
-        syspaths.sshsocket = syspaths.sshdir/options.remote.remote_host%'sock'
+        if not (sysvars.usrsshdir).is_dir():
+            print_error_and_exit(_('El directorio de configuración de SSH no existe'), path=sysvars.usrsshdir)
+        sysvars.sshsocket = sysvars.usrsshdir/options.remote.remote_host%'sock'
         try:
-            remoteroot = check_output(['ssh', '-o', 'ControlMaster=auto', '-o', 'ControlPersist=60', '-S', syspaths.sshsocket, \
+            remoteroot = check_output(['ssh', '-o', 'ControlMaster=auto', '-o', 'ControlPersist=60', '-S', sysvars.sshsocket, \
                 options.remote.remote_host, 'printenv JOBRUN_REMOTE_ROOT || true']).strip().decode(sys.stdout.encoding)
         except CalledProcessError as e:
             print_error_and_exit(_('No se pudo conectar con el servidor {host}'), host=options.remote.remote_host, error=e.output.decode(sys.stdout.encoding).strip())
         if remoteroot:
-            syspaths.remotehomedir = AbsPath(remoteroot) / (names.user + '@' + nodes.head)
+            sysvars.remotehomedir = AbsPath(remoteroot) / (sysvars.username + '@' + sysvars.headnode)
         else:
             print_error_and_exit(_('El servidor {host} no está configurado para aceptar trabajos'), host=options.remote.remote_host)
 
@@ -98,8 +98,11 @@ def configure_submission():
 
     if options.interpolation.mol:
         for i, path in enumerate(options.interpolation.mol, start=1):
-            path = AbsPath(path, relto=options.common['in'])
-            coords = readmol(path)[-1]
+            try:
+                abspath = AbsPath(path)
+            except NotAbsolutePathError:
+                abspath = AbsPath(options.common['in']) / path
+            coords = readmol(abspath)[-1]
             interpolationdict[f'mol{i}'] = molblock(coords, config.programspec)
 
     if options.interpolation.prefix:
@@ -114,7 +117,7 @@ def configure_submission():
 
     if interpolationdict and not options.interpolation.prefix:
         if len(options.interpolation.mol) == 1:
-            settings.prefix = AbsPath(options.interpolation.mol[0], relto=options.common['in']).stem
+            settings.prefix, __ = os.path.splitext(os.path.basename(options.interpolation.mol[0]))
         elif len(options.interpolation.mol) == 0:
             print_error_and_exit(_('Se debe especificar un prefijo o sufijo para interpolar sin un archivo coordenadas'))
         else:
@@ -126,7 +129,7 @@ def configure_submission():
     if 'scratch' in options.common:
         settings.execdir = AbsPath(options.common.scratch/'$jobid')
     else:
-        settings.execdir = AbsPath(ConfigTemplate(config.defaults.scratch).substitute(names))/'$jobid'
+        settings.execdir = AbsPath(ConfigTemplate(config.defaults.scratch).substitute(sysvars))/'$jobid'
 
     if 'mpilaunch' in config:
         try: config.mpilaunch = booleans[config.mpilaunch]
@@ -267,12 +270,12 @@ def configure_submission():
     ############ End of interactive parameter selection ###########
 
     try:
-        script.body.append(AbsPath(ConfigTemplate(config.versions[settings.version].executable).substitute(names)))
+        script.body.append(AbsPath(ConfigTemplate(config.versions[settings.version].executable).substitute(sysvars)))
     except NotAbsolutePathError:
         script.body.append(config.versions[settings.version].executable)
 
     for i, path in enumerate(config.logfiles):
-        script.meta.append(ConfigTemplate(path).safe_substitute(dict(logdir=AbsPath(ConfigTemplate(config.logdir).substitute(names)))))
+        script.meta.append(ConfigTemplate(path).safe_substitute(dict(logdir=AbsPath(ConfigTemplate(config.logdir).substitute(sysvars)))))
 
     for key, value in config.export.items():
         if value:
@@ -288,7 +291,7 @@ def configure_submission():
 
     for i, path in enumerate(config.source + config.versions[settings.version].source):
         if path:
-            script.config.append(f'source {AbsPath(ConfigTemplate(path).substitute(names))}')
+            script.config.append(f'source {AbsPath(ConfigTemplate(path).substitute(sysvars))}')
         else:
             print_error_and_exit(_('La ruta del script de entorno no está definida'))
 
@@ -308,14 +311,11 @@ def configure_submission():
     script.vars.append("totproc=$(getconf _NPROCESSORS_ONLN)")
     script.vars.append("maxram=$(($totram*$nproc/$totproc))")
 
+    for key, value in sysvars.items():
+        script.vars.append(f'{key}="{value}"')
+
     for key, value in config.filevars.items():
         script.vars.append(f'{key}="{config.filekeys[value]}"')
-
-    for key, value in names.items():
-        script.vars.append(f'{key}name="{value}"')
-
-    for key, value in nodes.items():
-        script.vars.append(f'{key}node="{value}"')
 
     for key in config.optargs:
         if not config.optargs[key] in config.filekeys:
@@ -380,9 +380,13 @@ def submit_single_job(indir, inputname, filtergroups):
     script.meta.append(ConfigTemplate(config.jobname).substitute(jobname=jobname))
 
     if 'out' in options.common:
-        outdir = AbsPath(options.common.out, relto=syspaths.cwd)
+        try:
+            outdir = AbsPath(options.common.out)
+        except NotAbsolutePathError:
+            cwd = os.getcwd()
+            outdir = AbsPath(cwd) / options.common.out
     else:
-        outdir = AbsPath(jobname, relto=indir)
+        outdir = AbsPath(indir) / jobname
 
     literal_inputs = {}
     interpolated_inputs = {}
@@ -455,9 +459,9 @@ def submit_single_job(indir, inputname, filtergroups):
 
     if options.remote.remote_host:
         remote_args = ArgGroups()
-        remote_in = syspaths.remotehomedir/'input'
-        remote_out = syspaths.remotehomedir/'output'
-        rel_outdir = os.path.relpath(outdir, syspaths.homedir)
+        remote_in = sysvars.remotehomedir/'input'
+        remote_out = sysvars.remotehomedir/'output'
+        rel_outdir = os.path.relpath(outdir, AbsPath('~'))
         remote_args.gather(options.common)
         remote_args.flags.add('job')
         remote_args.flags.add('proxy')
@@ -466,10 +470,10 @@ def submit_single_job(indir, inputname, filtergroups):
         filelist = []
         for key in config.filekeys:
             if (outdir/jobname%key).is_file():
-                filelist.append(syspaths.homedir/'.'/rel_outdir/jobname%key)
-        arglist = ['ssh', '-qt', '-S', syspaths.sshsocket, options.remote.remote_host]
+                filelist.append(AbsPath('~')/'.'/rel_outdir/jobname%key)
+        arglist = ['ssh', '-qt', '-S', sysvars.sshsocket, options.remote.remote_host]
         arglist.extend(f'{envar}={value}' for envar, value in environ.items())
-        arglist.append(names.command)
+        arglist.append(sysvars.commandname)
         arglist.extend(option(key) for key in remote_args.flags)
         arglist.extend(option(key, value) for key, value in remote_args.options.items())
         arglist.extend(option(key, value) for key, listval in remote_args.multoptions.items() for value in listval)
@@ -483,9 +487,9 @@ def submit_single_job(indir, inputname, filtergroups):
             print('</COMMAND>')
         else:
             try:
-                check_output(['ssh', '-S', syspaths.sshsocket, options.remote.remote_host, f"mkdir -p '{remote_in}' '{remote_out}'"])
-                check_output([f'rsync', '-e', "ssh -S '{syspaths.sshsocket}'", '-qRLtz'] + filelist + [f'{options.remote.remote_host}:{remote_in}'])
-                check_output([f'rsync', '-e', "ssh -S '{syspaths.sshsocket}'", '-qRLtz', '-f', '-! */'] + filelist + [f'{options.remote.remote_host}:{remote_out}'])
+                check_output(['ssh', '-S', sysvars.sshsocket, options.remote.remote_host, f"mkdir -p '{remote_in}' '{remote_out}'"])
+                check_output([f'rsync', '-e', "ssh -S '{sysvars.sshsocket}'", '-qRLtz'] + filelist + [f'{options.remote.remote_host}:{remote_in}'])
+                check_output([f'rsync', '-e', "ssh -S '{sysvars.sshsocket}'", '-qRLtz', '-f', '-! */'] + filelist + [f'{options.remote.remote_host}:{remote_out}'])
             except CalledProcessError as e:
                 print_error_and_exit(_('Error al copiar los archivos al servidor {host}'), host=options.remote.remote_host, error=e.output.decode(sys.stdout.encoding).strip())
             call(arglist)
@@ -534,7 +538,7 @@ def submit_single_job(indir, inputname, filtergroups):
     else:
 
         try:
-            last_time = os.stat(syspaths.usrdir).st_mtime
+            last_time = os.stat(sysvars.usrhpcdir).st_mtime
         except (FileNotFoundError, PermissionError):
             pass
         else:
@@ -548,10 +552,10 @@ def submit_single_job(indir, inputname, filtergroups):
             print_failure(_('El gestor de trabajos reportó un problema al enviar el trabajo {jobname}'), jobname=jobname, error=error)
             return
         else:
-            print_success(_('El trabajo "{jobname}" se correrá en {nproc} núcleo(s) en {clustername} con el número {jobid}'), jobname=jobname, nproc=options.common.nproc, clustername=names.cluster, jobid=jobid)
+            print_success(_('El trabajo "{jobname}" se correrá en {nproc} núcleo(s) en {clustername} con el número {jobid}'), jobname=jobname, nproc=options.common.nproc, clustername=sysvars.clustername, jobid=jobid)
             with open(jobdir/'id', 'w') as f:
                 f.write(jobid)
             try: 
-                os.utime(syspaths.usrdir, None)
+                os.utime(sysvars.usrhpcdir, None)
             except (FileNotFoundError, PermissionError):
                 pass

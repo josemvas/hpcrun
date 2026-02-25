@@ -10,15 +10,15 @@ from clinterface.printing import *
 from .i18n import _
 from .cli import parse_args
 from .submission import configure_submission, submit_single_job
-from .shared import names, nodes, syspaths, environ, config, options
+from .shared import sysvars, environ, config, options
 from .utils import ConfigTemplate, InterpolationTemplate, option, natural_sorted as sorted, catch_keyboard_interrupt, file_except_info
 
 @catch_keyboard_interrupt
 def submit_jobs(json_config):
 
     config.update(json.loads(json_config))
-    names.command = os.path.basename(sys.argv[0])
-    optiondict, argumentlist = parse_args(names.command, config)
+    sysvars.commandname = os.path.basename(sys.argv[0])
+    optiondict, argumentlist = parse_args(sysvars.commandname, config)
     options.update(optiondict)
     configure_submission()
 
@@ -38,24 +38,27 @@ def submit_jobs(json_config):
                 print_failure(_('No hay archivos de entrada con nombre {inputname}'), inputname=inputfile, indir=indir)
                 continue
         else:
-            path = AbsPath(inputfile, relto=options.common['in'])
             try:
-                path.assert_file()
+                abspath = AbsPath(inputfile)
+            except NotAbsolutePathError:
+                abspath = AbsPath(options.common['in']) / inputfile
+            try:
+                abspath.assert_file()
             except Exception as e:
-                file_except_info(e, path)
+                file_except_info(e, abspath)
                 continue
             for key in config.inputfiles:
-                if path.name.endswith('.' + key):
-                    inputname = path.name[:-len('.' + key)]
+                if abspath.name.endswith('.' + key):
+                    inputname = abspath.name[:-len('.' + key)]
                     break
             else:
-                print_failure(_('{file} no es un archivo de entrada de {package_name}'), file=path.name, package_name=config.packagename)
+                print_failure(_('{file} no es un archivo de entrada de {package_name}'), file=abspath.name, package_name=config.packagename)
                 continue
-            indir = path.parent
+            indir = abspath.parent
         filestatus = {}
         for key in config.filekeys:
-            path = indir/inputname%key
-            filestatus[key] = path.is_file() #or key in options.restartfiles
+            abspath = indir/inputname%key
+            filestatus[key] = abspath.is_file() #or key in options.restartfiles
         conflict = False
         for boolexpr, message in config.conflicts.items():
             if BoolParser(boolexpr).evaluate(filestatus):

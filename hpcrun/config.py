@@ -47,7 +47,10 @@ def _load_package_info(config_dir):
     package_profiles_dict = {}
     package_executables_dict = {}
     for profile in (config_dir/'package_profiles').iterdir():
-        specdict = json5_read(profile)
+        try:
+            specdict = json5_read(profile)
+        except InvalidJSONError as e:
+            print_error_and_exit(_('El archivo de configuración {file} contiene JSON inválido'), file=e.path, error=e)
         if 'packagename' in specdict:
             packagename = specdict['packagename']
             package_names.append(packagename)
@@ -88,7 +91,7 @@ def _build_config(packagename, config_dir, package_profiles_dict):
         config.update(json5_read(package_dir/'database'/'schedulers'/config.scheduler%'json'))
         config.update(json5_read(package_dir/'database'/'programspecs'/config.programspec%'json'))
     except InvalidJSONError as e:
-        print_error_and_exit(_('El archivo de configuración {file} contiene JSON inválido'), file=e.file_path, error=str(e))
+        print_error_and_exit(_('El archivo de configuración {file} contiene JSON inválido'), file=e.path, error=e)
     return config
 
 def _write_executable(packagename, config_dir, package_profiles_dict, package_executables_dict, install_dir):

@@ -11,7 +11,11 @@ class StorePath(Action):
     def __init__(self, **kwargs):
         super().__init__(nargs=1, **kwargs)
     def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, AbsPath(values[0], relto=getcwd()))
+        try:
+            abspath = AbsPath(values[0])
+        except NotAbsolutePathError:
+            abspath = AbsPath(getcwd()) / values[0]
+        setattr(namespace, self.dest, abspath)
 
 def parse_args(command, config):
 
