@@ -8,7 +8,7 @@ from boolparse import BoolParser
 from clinterface.printing import *
 
 from .i18n import _
-from .commandargs import parse_args
+from .cli import parse_args
 from .submission import configure_submission, submit_single_job
 from .shared import names, nodes, syspaths, environ, config, options
 from .utils import ConfigTemplate, InterpolationTemplate, option, natural_sorted as sorted, catch_keyboard_interrupt, file_except_info
