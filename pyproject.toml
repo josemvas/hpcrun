@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hpcrun"
+version = "0.1.1"
+description = "HPCrun is a configurable tool to run simulation jobs in HPC clusters"
+requires-python = ">=3.6"
+license = { text = "LGPLv3+" }
+keywords = ["hpc", "cluster", "job", "queue"]
+urls = { Homepage = "https://github.com/josemvas/hpcrun" }
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: POSIX",
+]
+
+dependencies = [
+    "json5conf",
+    "boolparse",
+    "abspathlib",
+    "clinterface",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+hpcrun = ["database/*/*"]
+
+[project.scripts]
+hpcrun-rewrite = "hpcrun.config:rewrite"
+hpcrun-reconfig = "hpcrun.config:reconfig"
