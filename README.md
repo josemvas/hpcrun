@@ -1,6 +1,6 @@
 About
 -----
-**HPCRun** is a configurable tool to run simulation jobs in HPC clusters. It is compatible with PBS, LSF and Slurm and currently supports the following simulation software:
+**HPCrun** is a configurable tool to run simulation jobs in HPC clusters. It is compatible with PBS, LSF and Slurm and currently supports the following simulation software:
 
 * DFTB+
 * Gaussian
@@ -17,15 +17,15 @@ pip3 install --user git+https://github.com/josemvas/hpcrun.git
 
 Configuration
 -------------
-To setup create a file `cluster_profile.json` and a directory `package_profiles` and run
+To configure create a file `cluster_profile.json` and a directory `package_profiles` and run
 ```
-hpcrun-setup
+hpcrun-reconfig
 ```
 and follow the instructions printed on the screen.
 
-To update the configuration edit `cluster_profile.json` and/or `package_profiles` and run
+To rewrite the configuration edit `cluster_profile.json` and/or `package_profiles` and run
 ```
-hpcrun-reload
+hpcrun-rewrite
 ```
 
 Upgrade

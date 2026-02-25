@@ -1,8 +1,0 @@
-#!/usr/bin/env python3
-import sys
-assert sys.version_info >= (3, 6)
-from hpcrun import config
-try:
-    config.setup()
-except KeyboardInterrupt:
-    print('Interrumpido por el usuario')
