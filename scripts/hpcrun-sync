@@ -62,8 +62,8 @@ conflicting=$(echo "$outfiles" | grep -v '^>f          ' | grep -v '^>f+++++++++
 #echo "$conflicting"
 #exit
 
-if [[ -v clean ]]; then 
-    if [[ -v force ]]; then 
+if [[ -v clean ]]; then
+    if [[ -v force ]]; then
         if [[ -n $synced || -n $conflicting || -n $unsynced ]]; then
             remove_files "$synced" "Se encontraron los siguientes archivos redundantes en $host"
             remove_files "$unsynced" "Se encontraron los siguientes archivos nuevos en $host"
@@ -87,7 +87,7 @@ if [[ -v clean ]]; then
         fi
     fi
 else
-    if [[ -v force ]]; then 
+    if [[ -v force ]]; then
         if [[ -n $unsynced  || -n $conflicting ]]; then
             sync_files "$unsynced"
             sync_files "$conflicting"
@@ -106,7 +106,7 @@ else
                 echo $yellow\Use las opciones --force para sobreescribir las versiones locales o --clean y --force para eliminar las versiones remotas$normal
             fi
         elif [[ -n $synced ]]; then
-            remove_files "$synced" "No hay archivos nuevos que sincronizar pero se encontraron los siguientes archivos redundantes en $host"
+            echo $yellow\No hay archivos nuevos que sincronizar en $host pero hay archivos redundantes, use la opción --clean para eliminarlos$normal
         else
             echo $yellow\No hay archivos nuevos que sincronizar en $host$normal
         fi
