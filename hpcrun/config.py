@@ -11,9 +11,7 @@ from clinterface import *
 from .i18n import _
 from .utils import catch_keyboard_interrupt
 
-package_dir = AbsPath(__file__).parent
 site_packages_dir = AbsPath(__file__).parent.parent
-package_data = site_packages_dir/package_dir.name%'dat'
 
 truthy_options = ['si', 'yes']
 falsy_options = ['no']
@@ -36,29 +34,32 @@ def _validate_config_dir(config_dir):
     """Validates that the required config directories and files exist."""
     if not config_dir.is_dir():
         print_error_and_exit(_('{config_dir} does not exist or is not a directory'), config_dir=config_dir)
-    if not (config_dir/'package_profiles').is_dir():
-        print_error_and_exit(_('{config_dir}/package_profiles does not exist or is not a directory'), config_dir=config_dir)
-    if not (config_dir/'cluster_profile.json').is_file():
-        print_error_and_exit(_('{config_dir}/cluster_profile.json does not exist or is not a file'), config_dir=config_dir)
+    if not (config_dir/'programs').is_dir():
+        print_error_and_exit(_('{config_dir}/programs does not exist or is not a directory'), config_dir=config_dir)
+    if not (config_dir/'cluster.profile').is_file():
+        print_error_and_exit(_('{config_dir}/cluster.profile does not exist or is not a file'), config_dir=config_dir)
 
 def _load_package_info(config_dir):
     """Reads all package profiles and returns names, profiles dict, and executables dict."""
     package_names = []
     package_profiles_dict = {}
     package_executables_dict = {}
-    for profile in (config_dir/'package_profiles').iterdir():
-        try:
-            specdict = json5_read(profile)
-        except InvalidJSONError as e:
-            print_error_and_exit(_('El archivo de configuración {file} contiene JSON inválido'), file=e.path, error=e)
-        if 'packagename' in specdict:
-            packagename = specdict['packagename']
-            package_names.append(packagename)
-            package_profiles_dict[packagename] = profile
-            package_executables_dict[packagename] = specdict['executablename']
+    for filepath in (config_dir/'programs').iterdir():
+        if filepath.suffix == '.profile':
+            try:
+                profile = json5_read(filepath)
+            except InvalidJSONError as e:
+                print_error_and_exit(_('El archivo de configuración {file} contiene JSON inválido'), file=e.path, error=e)
+            if 'displayname' in profile:
+                displayname = profile['displayname']
+            else:
+                displayname = filepath.stem
+            package_names.append(displayname)
+            package_profiles_dict[displayname] = filepath
+            package_executables_dict[displayname] = filepath.stem
     return package_names, package_profiles_dict, package_executables_dict
 
-def _build_config(packagename, config_dir, package_profiles_dict):
+def _build_config(displayname, config_dir, package_profiles_dict):
     """Builds and returns the merged JSONConfDict for a given package."""
     config = JSONConfDict(dict(
         load = [],
@@ -86,20 +87,20 @@ def _build_config(packagename, config_dir, package_profiles_dict):
         offscript = [],
     ))
     try:
-        config.update(json5_read(config_dir/'cluster_profile.json'))
-        config.update(json5_read(package_profiles_dict[packagename]))
-        config.update(json5_read(package_dir/'database'/'schedulers'/config.scheduler%'json'))
-        config.update(json5_read(package_dir/'database'/'programspecs'/config.programspec%'json'))
+        config.update(json5_read(config_dir/'cluster.profile'))
+        config.update(json5_read(config_dir/'scheduler.profile'))
+        config.update(json5_read(package_profiles_dict[displayname]))
+        config.update(json5_read(config_dir/'programs'/(config.jobspec + '.jobspec')))
     except InvalidJSONError as e:
         print_error_and_exit(_('El archivo de configuración {file} contiene JSON inválido'), file=e.path, error=e)
     return config
 
-def _write_executable(packagename, config_dir, package_profiles_dict, package_executables_dict, install_dir):
+def _write_executable(displayname, config_dir, package_profiles_dict, package_executables_dict, install_dir):
     """Builds config and writes the executable script for a given package."""
-    config = _build_config(packagename, config_dir, package_profiles_dict)
+    config = _build_config(displayname, config_dir, package_profiles_dict)
     dumping = json.dumps(config)
     try:
-        with open(install_dir/package_executables_dict[packagename], 'w') as file:
+        with open(install_dir/package_executables_dict[displayname], 'w') as file:
             file.write(f'#!{sys.executable}\n')
             file.write('import sys\n')
             file.write('from hpcrun import main\n')
@@ -107,7 +108,7 @@ def _write_executable(packagename, config_dir, package_profiles_dict, package_ex
             file.write(f"config = r'''{dumping}'''\n")
             file.write('sys.path.append(pypath)\n')
             file.write('main.submit_jobs(config)\n')
-        (install_dir/package_executables_dict[packagename]).chmod(0o755)
+        (install_dir/package_executables_dict[displayname]).chmod(0o755)
     except PermissionError:
         print_error_and_exit(_('No tiene permiso para escribir en el directorio {path}'), path=install_dir)
 
@@ -120,8 +121,8 @@ def reconfig():
     package_names, package_profiles_dict, package_executables_dict = _load_package_info(config_dir)
 
     enabled_packages = [
-        packagename for packagename in package_names
-        if (install_dir/package_executables_dict[packagename]).is_file()
+        displayname for displayname in package_names
+        if (install_dir/package_executables_dict[displayname]).is_file()
     ]
 
     if package_names:
@@ -131,11 +132,11 @@ def reconfig():
         print_warning(_('No hay ningún programa configurado todavía'))
         return
 
-    for packagename in package_names:
-        if packagename in selected_packages:
-            _write_executable(packagename, config_dir, package_profiles_dict, package_executables_dict, install_dir)
+    for displayname in package_names:
+        if displayname in selected_packages:
+            _write_executable(displayname, config_dir, package_profiles_dict, package_executables_dict, install_dir)
         else:
-            (install_dir/package_executables_dict[packagename]).unlink(missing_ok=True)
+            (install_dir/package_executables_dict[displayname]).unlink(missing_ok=True)
 
 @catch_keyboard_interrupt
 def rewrite():
@@ -146,13 +147,13 @@ def rewrite():
     package_names, package_profiles_dict, package_executables_dict = _load_package_info(config_dir)
 
     enabled_packages = [
-        packagename for packagename in package_names
-        if (install_dir/package_executables_dict[packagename]).is_file()
+        displayname for displayname in package_names
+        if (install_dir/package_executables_dict[displayname]).is_file()
     ]
 
     if not enabled_packages:
         print_warning(_('No hay ningún ejecutable instalado para recargar'))
         return
 
-    for packagename in enabled_packages:
-        _write_executable(packagename, config_dir, package_profiles_dict, package_executables_dict, install_dir)
+    for displayname in enabled_packages:
+        _write_executable(displayname, config_dir, package_profiles_dict, package_executables_dict, install_dir)

@@ -6,10 +6,10 @@ class ParseError(Exception):
     def __init__(self, *message):
         super().__init__(' '.join(message))
 
-def molblock(coords, programspec):
-    if programspec in ('gaussian', 'demon2k'):
+def molblock(coords, jobspec):
+    if jobspec in ('gaussian', 'demon2k'):
         return '\n'.join('{:<2s}  {:10.4f}  {:10.4f}  {:10.4f}'.format(*line) for line in coords)
-    elif programspec in ('dftbplus'):
+    elif jobspec in ('dftbplus'):
         atoms = []
         blocklines = []
         for line in coords:
@@ -21,7 +21,7 @@ def molblock(coords, programspec):
             blocklines.append(f'{i:5}  {atoms.index(line[0])+1:3}  {line[1]:10.4f}  {line[2]:10.4f}  {line[3]:10.4f}')
         return '\n'.join(blocklines)
     else:
-        print_error_and_exit(_('Formato desconocido: {format}'), format=programspec)
+        print_error_and_exit(_('Formato desconocido: {format}'), format=jobspec)
 
 def readmol(molfile):
     if molfile.is_file():

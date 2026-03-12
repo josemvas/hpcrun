@@ -43,7 +43,7 @@ def configure_submission():
             print_warning(_('El archivo de configuración {file} contiene JSON inválido'), file=sysvars.usrhpcconf, error=str(e))
 
     try:
-        config.packagename
+        config.displayname
     except AttributeError:
         print_error_and_exit(_('No se definió el nombre del programa'))
 
@@ -103,7 +103,7 @@ def configure_submission():
             except NotAbsolutePathError:
                 abspath = AbsPath(options.common['in']) / path
             coords = readmol(abspath)[-1]
-            interpolationdict[f'mol{i}'] = molblock(coords, config.programspec)
+            interpolationdict[f'mol{i}'] = molblock(coords, config.jobspec)
 
     if options.interpolation.prefix:
         try:
@@ -159,7 +159,7 @@ def configure_submission():
     ############ Local execution ###########
 
     if 'jobtype' in config:
-        script.meta.append(ConfigTemplate(config.jobtype).substitute(jobtype=config.programspec))
+        script.meta.append(ConfigTemplate(config.jobtype).substitute(jobtype=config.jobspec))
 
     if 'queue' in options.common:
         script.meta.append(ConfigTemplate(config.queue).substitute(queue=options.common.queue))

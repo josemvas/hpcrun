@@ -19,7 +19,7 @@ class StorePath(Action):
 
 def parse_args(command, config):
 
-    parser = ArgumentParser(prog=command, add_help=False, description='Envía trabajos de {} a la cola de ejecución.'.format(config.packagename), formatter_class=RawTextHelpFormatter)
+    parser = ArgumentParser(prog=command, add_help=False, description='Envía trabajos de {} a la cola de ejecución.'.format(config.displayname), formatter_class=RawTextHelpFormatter)
 
     group1 = parser.add_argument_group('Argumentos')
     group1.add_argument('files', nargs='*', metavar='FILE', help='Rutas de los archivos de entrada.')

@@ -52,7 +52,7 @@ def submit_jobs(json_config):
                     inputname = abspath.name[:-len('.' + key)]
                     break
             else:
-                print_failure(_('{file} no es un archivo de entrada de {package_name}'), file=abspath.name, package_name=config.packagename)
+                print_failure(_('{file} no es un archivo de entrada de {package_name}'), file=abspath.name, package_name=config.displayname)
                 continue
             indir = abspath.parent
         filestatus = {}
