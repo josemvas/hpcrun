@@ -139,7 +139,7 @@ def reconfig():
             (install_dir/package_executables_dict[displayname]).unlink(missing_ok=True)
 
 @catch_keyboard_interrupt
-def rewrite():
+def reload():
     config_dir = _default_config_dir()
     install_dir = _default_install_dir()
     _validate_config_dir(config_dir)
@@ -157,3 +157,13 @@ def rewrite():
 
     for displayname in enabled_packages:
         _write_executable(displayname, config_dir, package_profiles_dict, package_executables_dict, install_dir)
+
+def main():
+    parser = ArgumentParser(description=_('HPCRun configuration tool'))
+    parser.add_argument('command', choices=['reload', 'reconfig'], help=_('Command to execute'))
+    args = parser.parse_args()
+    
+    if args.command == 'reload':
+        reload()
+    elif args.command == 'reconfig':
+        reconfig()

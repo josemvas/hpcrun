@@ -27,8 +27,7 @@ dependencies = [
 where = ["."]
 
 [tool.setuptools]
-script-files = ["scripts/hpcrun-sync"]
+script-files = ["scripts/hpcsync"]
 
 [project.scripts]
-hpcrun-config-rewrite = "hpcrun.config:rewrite"
-hpcrun-config-reconfig = "hpcrun.config:reconfig"
+_hpcrunconf= "hpcrun.config:main"
