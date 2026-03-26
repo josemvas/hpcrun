@@ -73,11 +73,11 @@ def configure_submission():
         sysvars.sshsocket = sysvars.usrsshdir/options.remote.remote_host%'sock'
         try:
             remoteroot = check_output(['ssh', '-o', 'ControlMaster=auto', '-o', 'ControlPersist=60', '-S', sysvars.sshsocket, \
-                options.remote.remote_host, 'printenv JOBRUN_REMOTE_ROOT || true']).strip().decode(sys.stdout.encoding)
+                options.remote.remote_host, 'printenv HPCSYNC_ROOT || true']).strip().decode(sys.stdout.encoding)
         except CalledProcessError as e:
             print_error_and_exit(_('No se pudo conectar con el servidor {host}'), host=options.remote.remote_host, error=e.output.decode(sys.stdout.encoding).strip())
         if remoteroot:
-            sysvars.remotehomedir = AbsPath(remoteroot) / (sysvars.username + '@' + sysvars.headnode)
+            sysvars.remotehomedir = AbsPath(remoteroot) / sysvars.headnode / sysvars.username
         else:
             print_error_and_exit(_('El servidor {host} no está configurado para aceptar trabajos'), host=options.remote.remote_host)
 

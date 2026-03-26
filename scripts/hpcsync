@@ -7,7 +7,7 @@ yellow=$(tput setaf 3)
 
 sync_files () {
     test -z "$1" && return
-    rsync -e "ssh -S '$HOME/.ssh/$host.sock'" -ztvh --partial-dir=.rsyncpartdir --progress --files-from=- "$host":"$JOBRUN_REMOTE_ROOT/$USER@$HOSTNAME/output/" "$HOME" <<< "$1"
+    rsync -e "ssh -S '$HOME/.ssh/$host.sock'" -ztvh --partial-dir=.rsyncpartdir --progress --files-from=- "$host":"$HPCSYNC_ROOT/$HOSTNAME/$USER/output/" "$HOME" <<< "$1"
 }
 
 remove_files () {
@@ -18,7 +18,7 @@ remove_files () {
         case "$answer" in
           si)
             echo -n $yellow\Eliminando los archivos... $normal
-            rsync -e "ssh -S '$HOME/.ssh/$host.sock'" -tv --files-from=- --remove-source-files "$host":"$JOBRUN_REMOTE_ROOT/$USER@$HOSTNAME/output/" "$HOME" <<< "$1" | sed -n 's,^.f......... ,,p'
+            rsync -e "ssh -S '$HOME/.ssh/$host.sock'" -tv --files-from=- --remove-source-files "$host":"$HPCSYNC_ROOT/$HOSTNAME/$USER/output/" "$HOME" <<< "$1" | sed -n 's,^.f......... ,,p'
             echo $yellow\Hecho$normal
             break;;
           no)
@@ -49,8 +49,8 @@ else
     exit
 fi
 
-JOBRUN_REMOTE_ROOT=$(ssh -o ControlMaster=auto -o ControlPersist=60 -S "$HOME/.ssh/$host.sock" "$host" printenv JOBRUN_REMOTE_ROOT)
-outfiles=$(rsync -e "ssh -S '$HOME/.ssh/$host.sock'" -rntii --exclude='.*' "$host":"$JOBRUN_REMOTE_ROOT/$USER@$HOSTNAME/output/" "$HOME")
+HPCSYNC_ROOT=$(ssh -o ControlMaster=auto -o ControlPersist=60 -S "$HOME/.ssh/$host.sock" "$host" printenv HPCSYNC_ROOT)
+outfiles=$(rsync -e "ssh -S '$HOME/.ssh/$host.sock'" -rntii --exclude='.*' "$host":"$HPCSYNC_ROOT/$HOSTNAME/$USER/output/" "$HOME")
 
 synced=$(echo "$outfiles" | sed -n 's,^\.f          ,,p')
 unsynced=$(echo "$outfiles" | sed -n 's,^>f+++++++++ ,,p')
