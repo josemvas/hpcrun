@@ -371,6 +371,8 @@ def configure_submission():
 
 def submit_single_job(indir, inputname, filtergroups):
 
+    workdir = AbsPath(os.getcwd())
+
     if settings.prefix is None:
         jobname = inputname
     else:
@@ -383,8 +385,7 @@ def submit_single_job(indir, inputname, filtergroups):
         try:
             outdir = AbsPath(options.common.out)
         except NotAbsolutePathError:
-            cwd = os.getcwd()
-            outdir = AbsPath(cwd) / options.common.out
+            outdir = workdir / options.common.out
     else:
         outdir = AbsPath(indir) / jobname
 
@@ -452,9 +453,6 @@ def submit_single_job(indir, inputname, filtergroups):
         with open(path, 'w') as file:
             file.write(interpolated_inputs[path])
 
-#    for key, targetfile in options.restartfiles.items():
-#        targetfile.symlink_to(stagedir/jobname%config.fileopts[key])
-
     ############ Remote execution ###########
 
     if options.remote.remote_host:
@@ -516,8 +514,12 @@ def submit_single_job(indir, inputname, filtergroups):
         for key in config.inputfiles:
             if (indir/inputname%key).is_file():
                 f.write(script.importfile(stagedir/jobname%key, settings.execdir/config.filekeys[key]) + '\n')
-    #    for key in options.restartfiles:
-    #        f.write(script.importfile(stagedir/jobname%config.fileopts[key], settings.execdir/config.filekeys[config.fileopts[key]]) + '\n')
+        for key in options.restartfiles:
+            try:
+                path = AbsPath(options.restartfiles[key])
+            except NotAbsolutePathError:
+                path = workdir / options.restartfiles[key]
+            f.write(script.importfile(path, settings.execdir/config.filekeys[key]) + '\n')
         for path in parameterfiles:
             f.write(script.importfile(path, settings.execdir/path.name) + '\n')
         for path in parameterdirs:

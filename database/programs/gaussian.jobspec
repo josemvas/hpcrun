@@ -13,12 +13,17 @@
       chk: 'job.chk',
       wfn: 'job.wfn',
       cub: 'job.cub',
-   },
-
-   filevars: {
-      comfile: 'com',
-      gjffile: 'gjf',
-      chkfile: 'chk',
+      'FILE.31': 'FILE.31',
+      'FILE.32': 'FILE.32',
+      'FILE.33': 'FILE.33',
+      'FILE.34': 'FILE.34',
+      'FILE.35': 'FILE.35',
+      'FILE.36': 'FILE.36',
+      'FILE.37': 'FILE.37',
+      'FILE.38': 'FILE.38',
+      'FILE.39': 'FILE.39',
+      'FILE.40': 'FILE.40',
+      'FILE.41': 'FILE.41',
    },
 
    inputfiles: [
@@ -32,6 +37,17 @@
       'chk',
       'wfn',
       'cub',
+      'FILE.31',
+      'FILE.32',
+      'FILE.33',
+      'FILE.34',
+      'FILE.35',
+      'FILE.36',
+      'FILE.37',
+      'FILE.38',
+      'FILE.39',
+      'FILE.40',
+      'FILE.41',
    ],
 
    interpolable: [
@@ -47,14 +63,24 @@
       'solvent',
    ],
 
+   restartfiles: [
+      'chk',
+   ],
+
    posargs: [
       'gjf|com',
    ],
 
+   filevars: {
+      com_file: 'com',
+      gjf_file: 'gjf',
+      chk_file: 'chk',
+   },
+
    prescript: [
-      'sed -i "/^%/d" @($gjffile|$comfile)',
-      'sed -i "1i%Chk=$chkfile\\\\n%NProcShared=${nproc}\\\\n%Mem=${maxram}KB" @($gjffile|$comfile)',
-      'sed -i "/--Link1--/a%Chk=$chkfile\\\\n%NProcShared=${nproc}\\\\n%Mem=${maxram}KB" @($gjffile|$comfile)',
+      'sed -i "/^%/d" @($gjf_file|$com_file)',
+      'sed -i "1i%Chk=$chk_file\\\\n%NProcShared=${nproc}\\\\n%Mem=${maxram}KB" @($gjf_file|$com_file)',
+      'sed -i "/--Link1--/a%Chk=$chk_file\\\\n%NProcShared=${nproc}\\\\n%Mem=${maxram}KB" @($gjf_file|$com_file)',
    ],
 
 }

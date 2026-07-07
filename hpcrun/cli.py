@@ -68,6 +68,11 @@ def parse_args(command, config):
     for key in config.interpolvars:
         group7.add_argument(option(key), metavar='VALUE', default=SUPPRESS, help='Variable de interpolación')
 
+    group8 = parser.add_argument_group('Archivos de continuación')
+    group8.name = 'restartfiles'
+    for key in config.restartfiles:
+        group8.add_argument(option(key), metavar='FILE', default=SUPPRESS, help='Archivo de continuación')
+
     parsedargs = parser.parse_args()
 
     options = {}

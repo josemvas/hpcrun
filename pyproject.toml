@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hpcrun"
-version = "0.1.8"
+version = "0.1.9"
 description = "HPCrun is a configurable tool to run simulation jobs in HPC clusters"
 requires-python = ">=3.6"
 license = { text = "LGPLv3+" }
@@ -30,4 +30,4 @@ where = ["."]
 script-files = ["scripts/hpcsync"]
 
 [project.scripts]
-_hpcrunconf= "hpcrun.config:main"
+confighpcrun = "hpcrun.config:main"

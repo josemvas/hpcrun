@@ -1,3 +1,5 @@
+from io import StringIO
+
 from clinterface.printing import *
 from .i18n import _
 #from logging import WARNING
@@ -8,7 +10,7 @@ class ParseError(Exception):
 
 def molblock(coords, jobspec):
     if jobspec in ('gaussian', 'demon2k'):
-        return '\n'.join('{:<2s}  {:10.4f}  {:10.4f}  {:10.4f}'.format(*line) for line in coords)
+        return '\n'.join('{:<2s}  {:10.6f}  {:10.6f}  {:10.6f}'.format(*line) for line in coords)
     elif jobspec in ('dftbplus'):
         atoms = []
         blocklines = []
@@ -18,7 +20,7 @@ def molblock(coords, jobspec):
         blocklines.append(f'{len(coords):5} C')
         blocklines.append(' '.join(atoms))
         for i, line in enumerate(coords, start=1):
-            blocklines.append(f'{i:5}  {atoms.index(line[0])+1:3}  {line[1]:10.4f}  {line[2]:10.4f}  {line[3]:10.4f}')
+            blocklines.append(f'{i:5}  {atoms.index(line[0])+1:3}  {line[1]:10.6f}  {line[2]:10.6f}  {line[3]:10.6f}')
         return '\n'.join(blocklines)
     else:
         print_error_and_exit(_('Formato desconocido: {format}'), format=jobspec)
@@ -26,7 +28,7 @@ def molblock(coords, jobspec):
 def readmol(molfile):
     if molfile.is_file():
         with open(molfile, mode='r') as fh:
-            if molfile.suffix in ('.mol', '.sdf'):
+            if molfile.suffix == '.sdf':
                 try:
                     return parsemdl(fh)
                 except ParseError:
@@ -44,6 +46,11 @@ def readmol(molfile):
                     return parsemol2(fh)
                 except ParseError:
                     print_error_and_exit(_('{file} no es un archivo MOL2 válido'), file=molfile)
+            elif molfile.suffix == '.mol':
+                try:
+                    return parsemol(fh)
+                except ParseError:
+                    print_error_and_exit(_('{file} no es un archivo MOL válido'), file=molfile)
             elif molfile.suffix == '.log':
                 try:
                     return parseglf(fh)
@@ -82,6 +89,72 @@ def parsexyz(fh):
         except StopIteration:
             raise ParseError(_('Unexpected end of file'))
         trajectory.append(coords)
+
+def parsemol(fh):
+    """Parse a .mol file.
+
+    A .mol file can be one of three things:
+      - An MDL molfile (V2000 or V3000), single record, with no
+        trailing '$$$$' delimiter (unlike .sdf files).
+      - A plain multi-frame XYZ file.
+      - A Molden format file with an embedded multi-frame XYZ
+        trajectory under a '[GEOMETRIES] XYZ' section.
+    """
+    fh.seek(0)
+    lines = fh.readlines()
+
+    # Detect Molden format: look for the Molden/Geometries header near
+    # the top of the file.
+    for line in lines[:20]:
+        stripped = line.strip().upper()
+        if stripped.startswith('[MOLDEN FORMAT]') or stripped.startswith('[GEOMETRIES]'):
+            fh.seek(0)
+            return parsemoldenxyz(fh)
+
+    # Detect MDL molfile: the fourth line is the counts line, which for
+    # a valid V2000/V3000 CTAB ends with the version tag.
+    if len(lines) >= 4:
+        counts_line = lines[3].strip().upper()
+        if counts_line.endswith('V2000') or counts_line.endswith('V3000'):
+            fh.seek(0)
+            coords = _read_mdl_record(fh)
+            if coords is None:
+                raise ParseError(_('Registro MDL vacío'))
+            return [coords]
+
+    # Fall back to plain multi-frame XYZ.
+    fh.seek(0)
+    return parsexyz(fh)
+
+def parsemoldenxyz(fh):
+    """Extract and parse the embedded XYZ trajectory from a Molden file.
+
+    Molden files can carry an optimization/scan trajectory as a
+    concatenated multi-frame XYZ block under a '[GEOMETRIES] XYZ'
+    section header, followed by other Molden sections (e.g.
+    '[Molden Format]', '[Atoms]', '[GTO]', '[MO]', '[FREQ]', ...).
+    """
+    fh.seek(0)
+    lines = fh.readlines()
+
+    start = None
+    for i, line in enumerate(lines):
+        stripped = line.strip().upper()
+        if stripped.startswith('[GEOMETRIES]') and 'XYZ' in stripped:
+            start = i + 1
+            break
+
+    if start is None:
+        raise ParseError(_('No se encontró la sección [GEOMETRIES] XYZ en el archivo Molden'))
+
+    end = len(lines)
+    for i in range(start, len(lines)):
+        if lines[i].strip().startswith('['):
+            end = i
+            break
+
+    xyzblock = ''.join(lines[start:end])
+    return parsexyz(StringIO(xyzblock))
 
 def parsemdl(fh):
     """Parse MDL molfile (V2000 or V3000) or SDF containing multiple records."""
