@@ -12,7 +12,8 @@ from .i18n import _
 from .queue import submitjob, dispatchedjob
 from .shared import  sysvars, config, options, environ, settings, script, interpolationdict, parameterfiles, parameterdirs
 from .utils import ConfigTemplate, InterpolationTemplate, ArgGroups, booleans, option, collect_matches, template_parse
-from .readmol import readmol, molblock
+from .readmol import readmol
+from . import interpolation
 
 truthy_options = ['si', 'yes']
 falsy_options = ['no']
@@ -103,25 +104,35 @@ def configure_submission():
             except NotAbsolutePathError:
                 abspath = AbsPath(options.common['in']) / path
             coords = readmol(abspath)[-1]
-            interpolationdict[f'mol{i}'] = molblock(coords, config.jobspec)
+            interpolationdict[f'mol{i}'] = coords.write(config.jobspec)
 
-    if options.interpolation.prefix:
-        try:
-            settings.prefix = InterpolationTemplate(options.interpolation.prefix).substitute(interpolationdict)
-        except ValueError as e:
-            print_error_and_exit(_('El prefijo contiene variables de interpolación inválidas'), prefix=options.interpolation.prefix, key=e.args[0])
-        except KeyError as e:
-            print_error_and_exit(_('El prefijo contiene variables de interpolación indefinidas'), prefix=options.interpolation.prefix, key=e.args[0])
+    if options.interpolation.prefix is None:
+        interpolation.prefix = ''
     else:
-        settings.prefix = None
+        try:
+            interpolation.prefix = InterpolationTemplate(options.interpolation.prefix).substitute(interpolationdict)
+        except ValueError as e:
+            print_error_and_exit(_('El nombre contiene variables de interpolación inválidas'), name=options.interpolation.prefix, key=e.args[0])
+        except KeyError as e:
+            print_error_and_exit(_('El nombre contiene variables de interpolación indefinidas'), name=options.interpolation.prefix, key=e.args[0])
 
-    if interpolationdict and not options.interpolation.prefix:
+    if options.interpolation.suffix is None:
+        interpolation.suffix = ''
+    else:
+        try:
+            interpolation.suffix = InterpolationTemplate(options.interpolation.suffix).substitute(interpolationdict)
+        except ValueError as e:
+            print_error_and_exit(_('El nombre contiene variables de interpolación inválidas'), name=options.interpolation.suffix, key=e.args[0])
+        except KeyError as e:
+            print_error_and_exit(_('El nombre contiene variables de interpolación indefinidas'), name=options.interpolation.suffix, key=e.args[0])
+
+    if interpolationdict and options.interpolation.prefix is None:
         if len(options.interpolation.mol) == 1:
-            settings.prefix, __ = os.path.splitext(os.path.basename(options.interpolation.mol[0]))
+            interpolation.prefix = os.path.splitext(os.path.basename(options.interpolation.mol[0]))[0] + '_'
         elif len(options.interpolation.mol) == 0:
-            print_error_and_exit(_('Se debe especificar un prefijo o sufijo para interpolar sin un archivo coordenadas'))
+            print_error_and_exit(_('Se debe especificar un primer nombre para interpolar sin un archivo coordenadas'))
         else:
-            print_error_and_exit(_('Se debe especificar un prefijo o sufijo para interpolar con más de un archivo de coordenadas'))
+            print_error_and_exit(_('Se debe especificar un primer nombre interpolar con más de un archivo de coordenadas'))
 
     if not 'scratch' in config.defaults:
         print_error_and_exit(_('No se especificó el directorio de escritura predeterminado'))
@@ -372,11 +383,7 @@ def configure_submission():
 def submit_single_job(indir, inputname, filtergroups):
 
     workdir = AbsPath(os.getcwd())
-
-    if settings.prefix is None:
-        jobname = inputname
-    else:
-        jobname = settings.prefix + '_' + inputname
+    jobname = interpolation.prefix + inputname + interpolation.suffix
 
     script.vars.append(f'jobname="{jobname}"')
     script.meta.append(ConfigTemplate(config.jobname).substitute(jobname=jobname))
@@ -476,7 +483,7 @@ def submit_single_job(indir, inputname, filtergroups):
         arglist.extend(option(key, value) for key, value in remote_args.options.items())
         arglist.extend(option(key, value) for key, listval in remote_args.multoptions.items() for value in listval)
         arglist.append(jobname)
-        if options.common.debug:
+        if options.common.dry_run:
             print('<FILELIST>')
             print('\n'.join(filelist))
             print('</FILELIST>')
@@ -533,7 +540,7 @@ def submit_single_job(indir, inputname, filtergroups):
         f.write(script.removedir(settings.execdir) + '\n')
         f.write(''.join(i + '\n' for i in config.offscript))
 
-    if options.common.debug:
+    if options.common.dry_run:
 
         print_success(_('Se procesó el trabajo "{jobname}" y se generaron los archivos para el envío en el directorio {jobdir}'), jobname=jobname, jobdir=jobdir)
 

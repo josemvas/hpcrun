@@ -35,7 +35,7 @@ def parse_args(command, config):
     group2.add_argument('--out', action=StorePath, metavar='PATH', default=SUPPRESS, help='Escribir los archivos de salida del trabajo en el directorio PATH.')
     group2.add_argument('--scratch', action=StorePath, metavar='PATH', default=SUPPRESS, help='Escribir los archivos temporales en el directorio PATH.')
     group2.add_argument('--proxy', action='store_true', help='Enviar el trabajo procesado por un cliente remoto.')
-    group2.add_argument('--debug', action='store_true', help='Procesar el trabajo sin enviarlo.')
+    group2.add_argument('-d', '--dry-run', action='store_true', help='Procesar el trabajo sin enviarlo.')
     hostgroup = group2.add_mutually_exclusive_group()
     hostgroup.add_argument('-N', '--nhost', type=int, metavar='#NODES', default=1, help='Requerir #NODES nodos de ejecución.')
     hostgroup.add_argument('--hosts', metavar='NODE', default=SUPPRESS, help='Solicitar nodos específicos de ejecución.')
@@ -54,9 +54,10 @@ def parse_args(command, config):
 
     group5 = parser.add_argument_group('Opciones de interpolación')
     group5.name = 'interpolation'
-    group5.add_argument('--prefix', metavar='PREFIX', default=None, help='Agregar el prefijo PREFIX al nombre del trabajo.')
     group5.add_argument('-m', '--mol', metavar='MOLFILE', action='append', default=[], help='Incluir el último paso del archivo MOLFILE en las variables de interpolación.')
     group5.add_argument('-x', '--var', dest='posvars', metavar='VALUE', action='append', default=[], help='Variables posicionales de interpolación.')
+    group5.add_argument('--prefix', metavar='PREFIX', default=None, help='Agregar el sufijo PREFIX al nombre del trabajo.')
+    group5.add_argument('--suffix', metavar='SUFFIX', default=None, help='Agregar el sufijo SUFFIX al nombre del trabajo.')
 
     group6 = parser.add_argument_group('Conjuntos de parámetros')
     group6.name = 'parametersets'

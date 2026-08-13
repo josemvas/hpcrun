@@ -1,29 +1,43 @@
-from io import StringIO
-
 from clinterface.printing import *
 from .i18n import _
-#from logging import WARNING
 
 class ParseError(Exception):
     def __init__(self, *message):
         super().__init__(' '.join(message))
 
-def molblock(coords, jobspec):
-    if jobspec in ('gaussian', 'demon2k'):
-        return '\n'.join('{:<2s}  {:10.6f}  {:10.6f}  {:10.6f}'.format(*line) for line in coords)
-    elif jobspec in ('dftbplus'):
-        atoms = []
-        blocklines = []
-        for line in coords:
-            if not line[0] in atoms:
-                atoms.append(line[0])
-        blocklines.append(f'{len(coords):5} C')
-        blocklines.append(' '.join(atoms))
-        for i, line in enumerate(coords, start=1):
-            blocklines.append(f'{i:5}  {atoms.index(line[0])+1:3}  {line[1]:10.6f}  {line[2]:10.6f}  {line[3]:10.6f}')
-        return '\n'.join(blocklines)
-    else:
-        print_error_and_exit(_('Formato desconocido: {format}'), format=jobspec)
+class MolBlock:
+    """Base class for a single parsed molecular frame with format-specific writers."""
+    def write(self, jobspec):
+        raise NotImplementedError
+
+class CoordBlock(MolBlock, list):
+    """A frame of (element, x, y, z) Cartesian coordinate tuples."""
+    def write(self, jobspec):
+        if jobspec in ('gaussian', 'demon2k'):
+            return '\n'.join('{:<2s}  {:10.6f}  {:10.6f}  {:10.6f}'.format(*line) for line in self)
+        elif jobspec in ('dftbplus'):
+            atoms = []
+            blocklines = []
+            for line in self:
+                if not line[0] in atoms:
+                    atoms.append(line[0])
+            blocklines.append(f'{len(self):5} C')
+            blocklines.append(' '.join(atoms))
+            for i, line in enumerate(self, start=1):
+                blocklines.append(f'{i:5}  {atoms.index(line[0])+1:3}  {line[1]:10.6f}  {line[2]:10.6f}  {line[3]:10.6f}')
+            return '\n'.join(blocklines)
+        else:
+            print_error_and_exit(_('Formato desconocido: {format}'), format=jobspec)
+
+class ZMatBlock(MolBlock, str):
+    """Raw Z-matrix text.
+
+    Returned unchanged regardless of jobspec, since Z-matrices use
+    internal coordinates that don't translate to a Cartesian coordinate
+    block.
+    """
+    def write(self, jobspec):
+        return str(self)
 
 def readmol(molfile):
     if molfile.is_file():
@@ -51,13 +65,13 @@ def readmol(molfile):
                     return parsemol(fh)
                 except ParseError:
                     print_error_and_exit(_('{file} no es un archivo MOL válido'), file=molfile)
-            elif molfile.suffix == '.log':
+            elif molfile.suffix == '.zmat':
                 try:
-                    return parseglf(fh)
+                    return parsezmat(fh)
                 except ParseError:
-                    print_error_and_exit(_('{file} no es un archivo de salida de gaussian válido'), file=molfile)
+                    print_error_and_exit(_('{file} no es un archivo Z-matrix válido'), file=molfile)
             else:
-                print_error_and_exit(_('Solamente se pueden leer archivos mol, sdf, mol2, xyz y log'))
+                print_error_and_exit(_('Solamente se pueden leer archivos mol, sdf, mol2, xyz y zmat'))
     elif molfile.is_dir():
         print_error_and_exit(_('El archivo {file} es un directorio'), file=molfile)
     elif molfile.exists():
@@ -69,7 +83,7 @@ def parsexyz(fh):
     fh.seek(0)
     trajectory = []
     while True:
-        coords = []
+        coords = CoordBlock()
         try:
             natom = next(fh)
         except StopIteration:
@@ -83,33 +97,37 @@ def parsexyz(fh):
             raise ParseError(_('Invalid format'))
         try:
             title = next(fh)
-            for _ in range(natom):
-                e, x, y, z, *_ = next(fh).split()
+            for __ in range(natom):
+                e, x, y, z, *__ = next(fh).split()
                 coords.append((e, float(x), float(y), float(z)))
         except StopIteration:
             raise ParseError(_('Unexpected end of file'))
         trajectory.append(coords)
 
+def parsezmat(fh):
+    """Parse a .zmat file by copying its raw content as-is.
+
+    Z-matrix files describe internal coordinates rather than Cartesian
+    coordinates, so no structural parsing is performed here — the raw
+    text content of the file is wrapped in a ZMatBlock and returned
+    unchanged.
+    """
+    fh.seek(0)
+    content = fh.read().rstrip('\n')
+    if not content.strip():
+        raise ParseError(_('El archivo Z-matrix está vacío'))
+    return [ZMatBlock(content)]
+
 def parsemol(fh):
     """Parse a .mol file.
 
-    A .mol file can be one of three things:
+    A .mol file can be one of two things:
       - An MDL molfile (V2000 or V3000), single record, with no
         trailing '$$$$' delimiter (unlike .sdf files).
       - A plain multi-frame XYZ file.
-      - A Molden format file with an embedded multi-frame XYZ
-        trajectory under a '[GEOMETRIES] XYZ' section.
     """
     fh.seek(0)
     lines = fh.readlines()
-
-    # Detect Molden format: look for the Molden/Geometries header near
-    # the top of the file.
-    for line in lines[:20]:
-        stripped = line.strip().upper()
-        if stripped.startswith('[MOLDEN FORMAT]') or stripped.startswith('[GEOMETRIES]'):
-            fh.seek(0)
-            return parsemoldenxyz(fh)
 
     # Detect MDL molfile: the fourth line is the counts line, which for
     # a valid V2000/V3000 CTAB ends with the version tag.
@@ -125,36 +143,6 @@ def parsemol(fh):
     # Fall back to plain multi-frame XYZ.
     fh.seek(0)
     return parsexyz(fh)
-
-def parsemoldenxyz(fh):
-    """Extract and parse the embedded XYZ trajectory from a Molden file.
-
-    Molden files can carry an optimization/scan trajectory as a
-    concatenated multi-frame XYZ block under a '[GEOMETRIES] XYZ'
-    section header, followed by other Molden sections (e.g.
-    '[Molden Format]', '[Atoms]', '[GTO]', '[MO]', '[FREQ]', ...).
-    """
-    fh.seek(0)
-    lines = fh.readlines()
-
-    start = None
-    for i, line in enumerate(lines):
-        stripped = line.strip().upper()
-        if stripped.startswith('[GEOMETRIES]') and 'XYZ' in stripped:
-            start = i + 1
-            break
-
-    if start is None:
-        raise ParseError(_('No se encontró la sección [GEOMETRIES] XYZ en el archivo Molden'))
-
-    end = len(lines)
-    for i in range(start, len(lines)):
-        if lines[i].strip().startswith('['):
-            end = i
-            break
-
-    xyzblock = ''.join(lines[start:end])
-    return parsexyz(StringIO(xyzblock))
 
 def parsemdl(fh):
     """Parse MDL molfile (V2000 or V3000) or SDF containing multiple records."""
@@ -215,13 +203,13 @@ def _parse_v2000_ctab(counts_line, fh):
     except (IndexError, ValueError):
         raise ParseError(_('Invalid format'))
 
-    coords = []
+    coords = CoordBlock()
     try:
-        for _ in range(natom):
+        for __ in range(natom):
             fields = next(fh).split()
             x, y, z, e = fields[0], fields[1], fields[2], fields[3]
             coords.append((e, float(x), float(y), float(z)))
-        for _ in range(nbond):
+        for __ in range(nbond):
             next(fh)
     except StopIteration:
         raise ParseError(_('Unexpected end of file'))
@@ -240,7 +228,7 @@ def _parse_v2000_ctab(counts_line, fh):
 
 def _parse_v3000_ctab(fh):
     """Parse a V3000 CTAB atom block from an open file handle."""
-    coords = []
+    coords = CoordBlock()
     in_atom_block = False
     try:
         for line in fh:
@@ -275,7 +263,7 @@ def parsemol2(fh):
     """Parse a Tripos MOL2 file, which may contain multiple molecules."""
     fh.seek(0)
     trajectory = []
-    coords = []
+    coords = CoordBlock()
     in_atom_block = False
 
     for line in fh:
@@ -284,7 +272,7 @@ def parsemol2(fh):
             # Save any previously accumulated molecule
             if coords:
                 trajectory.append(coords)
-                coords = []
+                coords = CoordBlock()
             in_atom_block = False
         elif stripped.startswith('@<TRIPOS>ATOM'):
             in_atom_block = True
@@ -309,17 +297,3 @@ def parsemol2(fh):
     if not trajectory:
         raise ParseError(_('No valid MOL2 records found'))
     return trajectory
-
-def parseglf(fh):
-    try:
-        import cclib
-    except ImportError:
-        print_error_and_exit(_('Debe instalar cclib para poder leer el archivo de coordenadas'))
-    logfile = cclib.io.ccopen(fh)
-#    logfile = cclib.io.ccopen(fh, loglevel=WARNING)
-    try:
-        data = logfile.parse()
-    except Exception:
-        raise ParseError(_('Invalid format'))
-    pt = cclib.parser.utils.PeriodicTable()
-    return [[(pt.element[data.atomnos[i]], e[0], e[1], e[2]) for i, e in enumerate(data.atomcoords[-1])]]
