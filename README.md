@@ -17,15 +17,15 @@ pip3 install --user git+https://github.com/josemvas/hpcrun.git
 
 Configuration
 -------------
-To configure create a file `cluster_profile.json` and a directory `package_profiles` and run
+To configure create the files `cluster.profile`, `scheduler.profile`, `programs/progname.profile` and `programs/progname.jobspec` and run:
 ```
-hpcrun-reconfig
+config-hpcrun reconfig
 ```
 and follow the instructions printed on the screen.
 
-To rewrite the configuration edit `cluster_profile.json` and/or `package_profiles` and run
+To reload changes in the configuration files run:
 ```
-hpcrun-rewrite
+config-hpcrun reload
 ```
 
 Upgrade

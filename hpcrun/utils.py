@@ -157,8 +157,3 @@ def template_parse(template_str, s):
         raise Exception("Format string did not match")
     # Return a dict with all of our keywords and their values
     return {x: matches.group(x) for x in keywords}
-
-booleans = {
-    'True': True,
-    'False': False
-}

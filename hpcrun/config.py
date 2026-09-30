@@ -104,11 +104,9 @@ def _write_executable(displayname, config_dir, package_profiles_dict, package_ex
         with open(install_dir/package_executables_dict[displayname], 'w') as file:
             file.write(f'#!{sys.executable}\n')
             file.write('import sys\n')
+            file.write(f"sys.path.append(r'{site_packages_dir}')\n")
             file.write('from hpcrun import main\n')
-            file.write(f"pypath = r'{site_packages_dir}'\n")
-            file.write(f"config = r'''{dumping}'''\n")
-            file.write('sys.path.append(pypath)\n')
-            file.write('main.submit_jobs(config)\n')
+            file.write(f"main.submit_jobs(r'''{dumping}''')\n")
         (install_dir/package_executables_dict[displayname]).chmod(0o755)
     except PermissionError:
         print_error_and_exit(_('No tiene permiso para escribir en el directorio {path}'), path=install_dir)

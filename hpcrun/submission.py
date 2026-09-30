@@ -11,7 +11,7 @@ from clinterface import *
 from .i18n import _
 from .queue import submitjob, dispatchedjob
 from .shared import  sysvars, config, options, environ, settings, script, interpolationdict, parameterfiles, parameterdirs
-from .utils import ConfigTemplate, InterpolationTemplate, ArgGroups, booleans, option, collect_matches, template_parse
+from .utils import ConfigTemplate, InterpolationTemplate, ArgGroups, option, collect_matches, template_parse
 from .readmol import readmol
 from . import interpolation
 
@@ -142,11 +142,6 @@ def configure_submission():
     else:
         settings.execdir = AbsPath(ConfigTemplate(config.defaults.scratch).substitute(sysvars))/'$jobid'
 
-    if 'mpilaunch' in config:
-        try: config.mpilaunch = booleans[config.mpilaunch]
-        except KeyError:
-            print_error_and_exit(_('Se requier un valor boolenano'), mpilaunch=config.mpilaunch)
-    
     if not config.filekeys:
         print_error_and_exit(_('Se requiere una lista de claves de archivo no vacía'), filekeys=config.filekeys)
     
